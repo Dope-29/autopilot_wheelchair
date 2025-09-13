@@ -32,6 +32,7 @@ GRAY = (200, 200, 200)
 RED = (255, 0, 0)
 YELLOW = (255, 255, 0)
 GREEN = (0, 255, 0)
+BLUE = (0, 0, 255)
 
 # Fonts
 FONT = pygame.font.SysFont(None, 20)
@@ -67,16 +68,19 @@ room_coords = {
     "Patient's Room": (4, 13),
     "Nurses Room": (6, 13)
 }
-room_labels = {
-    "ICU": (5, 1),
-    "Doctor's Room": (11, 1),
-    "Restroom": (18, 6),
-    "Pharmacy": (14, 12),
-    "Patient's Room": (1, 13),
-    "Nurses Room": (6, 13)
+label_coords = {
+    "ICU": (5, 0),
+    "Doctor's Room": (11, 0),
+    "Restroom": (18, 5),
+    "Pharmacy": (14, 13),
+    "Patient's Room": (2, 13),
+    "Nurses Room": (8, 13)
 }
 
 wheel_x, wheel_y = 0, 0
+# Pixel-based position for smooth movement
+wheel_px, wheel_py = wheel_x * TILE_SIZE, wheel_y * TILE_SIZE
+speed = 4  # smaller = slower
 
 # Define corridor path
 trashbin_path = set()
@@ -131,23 +135,23 @@ def draw_window(path, alert=False, blink=False):
             if grid[row][col] == 2:
                 pygame.draw.rect(WIN, YELLOW, (col*TILE_SIZE, row*TILE_SIZE, TILE_SIZE, TILE_SIZE))
 
-    # Draw wheelchair
-    WIN.blit(wheelchair_img, (wheel_x*TILE_SIZE, wheel_y*TILE_SIZE))
+    # Draw wheelchair at pixel coords
+    WIN.blit(wheelchair_img, (int(wheel_px), int(wheel_py)))
 
     # Draw alert blink
     if alert and blink:
-        cx, cy = wheel_x*TILE_SIZE + TILE_SIZE//2, wheel_y*TILE_SIZE
+        cx, cy = int(wheel_px) + TILE_SIZE//2, int(wheel_py)
         pygame.draw.circle(WIN, RED, (cx, cy-10), 10)
 
-    # Draw room labels (centered above tiles)
-    for room, (rx, ry) in room_labels.items():
-        label = FONT.render(room, True, LIGHTBLUE)
-        label_rect = label.get_rect()
-        label_rect.centerx = rx*TILE_SIZE + TILE_SIZE//2
-        label_rect.bottom = ry*TILE_SIZE - 2
-        WIN.blit(label, label_rect)
+    # 🔑 Draw room labels last so they’re always on top
+    for name, (rx, ry) in label_coords.items():
+        text = FONT.render(name, True, YELLOW)
+        text_rect = text.get_rect(center=(rx*TILE_SIZE + TILE_SIZE//2, ry*TILE_SIZE + TILE_SIZE//2))
+        WIN.blit(text, text_rect)
 
     pygame.display.update()
+
+
 
 def get_room_name_input():
     input_box = pygame.Rect(50, HEIGHT-80, 300, 32)
@@ -179,7 +183,7 @@ def popup_message(text, color=BLACK):
     pygame.time.wait(2500)
 
 def main():
-    global wheel_x, wheel_y
+    global wheel_x, wheel_y, wheel_px, wheel_py
     room_name = None
     while room_name not in room_coords:
         room_name = get_room_name_input()
@@ -194,7 +198,7 @@ def main():
     alert_start = None
 
     while running:
-        clock.tick(5)
+        clock.tick(30)  # higher fps for smooth movement
         for event in pygame.event.get():
             if event.type == pygame.QUIT: running = False
             elif event.type == pygame.MOUSEBUTTONDOWN:
@@ -230,7 +234,17 @@ def main():
             alert_mode = False
             BEEP.stop()
             next_x, next_y = path[step_index]
-            if grid[next_y][next_x] != 2:
+            target_px, target_py = next_x * TILE_SIZE, next_y * TILE_SIZE
+
+            dx = target_px - wheel_px
+            dy = target_py - wheel_py
+            dist = (dx**2 + dy**2) ** 0.5
+
+            if dist > speed:
+                wheel_px += speed * dx / dist
+                wheel_py += speed * dy / dist
+            else:
+                wheel_px, wheel_py = target_px, target_py
                 wheel_x, wheel_y = next_x, next_y
                 step_index += 1
 
